@@ -1,0 +1,148 @@
+LOCAL RAG RESEARCH ASSISTANT - HOW TO RUN
+==========================================
+
+This project answers questions from your own PDF/text files, running fully
+on your computer using Ollama (llama3.2). No cloud API is needed after setup.
+
+
+WHAT YOU NEED
+-------------
+1. Windows PC with at least 8 GB RAM (16 GB recommended)
+2. Python 3.11  (https://www.python.org/downloads/ - tick "Add python.exe to PATH")
+3. Ollama       (https://ollama.com)
+4. Git          (optional, only if you clone the repo)
+
+
+STEP 1 - GET THE CODE
+---------------------
+Option A: Clone with Git
+    git clone https://github.com/<your-username>/Local-RAG-based-Research-Assistant.git
+    cd Local-RAG-based-Research-Assistant
+
+Option B: Download the ZIP
+    On the GitHub page, click Code > Download ZIP, then unzip it.
+    Open a terminal inside the unzipped folder.
+
+
+STEP 2 - INSTALL OLLAMA AND THE MODEL
+-------------------------------------
+1. Install Ollama from https://ollama.com and open it (it runs in the system tray).
+2. In a terminal, run:
+       ollama pull llama3.2
+3. Check it is installed:
+       ollama list
+   You should see llama3.2 in the list.
+
+
+STEP 3 - CREATE THE PYTHON ENVIRONMENT
+--------------------------------------
+Run these in the project folder:
+
+    py -3.11 -m venv venv
+    venv\Scripts\activate
+    pip install -r requirements.txt
+
+When it works, the prompt starts with (venv).
+The first install is large (PyTorch), so it can take several minutes.
+
+Check the version:
+    python --version
+It should say Python 3.11.x.
+
+
+STEP 4 - ADD YOUR DOCUMENTS
+---------------------------
+Put your PDF files in the data\ folder. The data\ folder is not stored in
+GitHub, so each person adds their own files.
+
+Convert each PDF to text (run once per PDF):
+
+    python extract_pdf.py "data\your_file.pdf"
+
+This creates data\your_file.txt. Check that the .txt file is not empty.
+Scanned PDFs (images only) produce little or no text and will give poor answers.
+
+You can also put plain .txt files directly in data\ without converting them.
+
+
+STEP 5 - BUILD THE INDEX
+------------------------
+    python ingest.py
+
+This reads every .txt file in data\ and saves the index to embeddings.npz.
+The first run downloads the embedding model (about 90 MB), so it needs internet.
+Run this again any time you add or change files in data\.
+
+
+STEP 6 - ASK QUESTIONS
+----------------------
+Make sure Ollama is running in the system tray, then:
+
+    python chat.py
+
+Type your question at the "You:" prompt. Type exit to quit.
+Each answer ends with a "(sources: ...)" line showing which files were used.
+
+
+QUICK REFERENCE
+---------------
+Add a new PDF:
+    1. Copy it into data\
+    2. python extract_pdf.py "data\new_file.pdf"
+    3. python ingest.py
+    4. python chat.py
+
+Start a new session later:
+    venv\Scripts\activate
+    python chat.py
+    (Ollama must be running)
+
+
+OPTIONAL - RUN WITH DOCKER
+--------------------------
+1. On your computer, set the environment variable OLLAMA_HOST to 0.0.0.0
+   and restart Ollama.
+2. Build and run:
+       docker build -t local-rag .
+       docker run -it --rm --add-host=host.docker.internal:host-gateway local-rag
+   (On Docker Desktop for Windows you can leave out --add-host.)
+   The container uses embeddings.npz from the repo. data\ is not copied into
+   the image, so to add new documents, run ingest.py on your computer first
+   and then rebuild the image.
+
+
+TROUBLESHOOTING
+---------------
+"python is not recognized"
+    Reinstall Python and tick "Add python.exe to PATH", then reopen the terminal.
+
+"Could not reach Ollama"
+    Open the Ollama app so its icon is in the system tray, then try again.
+
+"embeddings.npz not found"
+    Run python ingest.py first.
+
+"No .txt files found in data/"
+    Run extract_pdf.py on your PDFs, or add .txt files to data\.
+
+Model not found / downloads again
+    Check the OLLAMA_MODELS environment variable points to the folder where
+    Ollama stores its models, then restart Ollama.
+
+pip install fails with "No matching distribution"
+    Make sure the venv was created with Python 3.11 (py -3.11 -m venv venv).
+
+Answers say "I don't know" for things in your files
+    Try asking with the exact terms used in the document, or add more
+    context to the question. Scanned PDFs with no text cannot be searched.
+
+
+WHAT IS IN THE REPO
+-------------------
+ingest.py        builds the index from data\*.txt
+chat.py          retrieves relevant chunks and asks llama3.2 to answer
+extract_pdf.py   converts a PDF to a .txt file in data\
+requirements.txt Python dependencies (pinned versions)
+embeddings.npz   saved index (created by ingest.py)
+Dockerfile       container build (optional)
+README.md        project overview
