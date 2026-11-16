@@ -1,64 +1,105 @@
-# Local RAG-based Research Assistant
-
-Ask questions about your own study material and get answers from a local LLM, with no cloud API. Documents are split into chunks, embedded with `all-MiniLM-L6-v2`, and searched by cosine similarity. The top matches are passed to `llama3.2` running in Ollama, which answers only from those passages and names the source files.
-
-## Stack
-
-Python, sentence-transformers, NumPy (cosine-similarity search, no vector database), Ollama (llama3.2), pypdf, Docker.
-
-## Setup (Windows, macOS, or Linux)
-
-1. Install [Ollama](https://ollama.com) and pull the model:
-   ```
-   ollama pull llama3.2
-   ```
-2. Create a virtual environment and install dependencies:
-   ```
-   python -m venv venv
-   venv\Scripts\activate        # macOS/Linux: source venv/bin/activate
-   pip install -r requirements.txt
-   ```
-
-The first run of `ingest.py` downloads the embedding model (about 90 MB). After that, everything runs offline.
-
-## Usage
-
+Local RAG-based Research Assistant
+Ask questions about your own PDF and text files, fully offline. The assistant retrieves the most relevant passages from your documents and answers with a local LLM (Ollama + llama3.2). No cloud API, no data leaves your machine.
+Features
+100% local: embeddings and LLM both run on your computer
+Grounded answers: each reply ends with a `(sources: ...)` line showing which files were used
+PDF support: convert PDFs to text with one command
+Dockerized: run the chat in a container from PowerShell or Docker Desktop
+Simple: three scripts, no database server
+How it works
 ```
-python extract_pdf.py your_paper.pdf   # PDFs only: converts to data/your_paper.txt
-python ingest.py                        # builds embeddings.npz from data/*.txt
-python chat.py                          # interactive Q&A (type 'exit' to quit)
+PDF/TXT files --> extract_pdf.py --> data/*.txt
+                                        |
+                                    ingest.py  (chunk + embed)
+                                        |
+                                  embeddings.npz
+                                        |
+Your question --> chat.py --> retrieve top chunks --> llama3.2 (Ollama) --> answer + sources
 ```
+Ingest: documents are split into chunks and embedded with a sentence-transformer model.
+Index: vectors are saved to `embeddings.npz`.
+Retrieve: your question is embedded and matched against the stored chunks.
+Generate: the best chunks are passed to llama3.2 as context to produce the answer.
+Tech stack
+Python 3.11 · Ollama (llama3.2) · sentence-transformers / PyTorch · NumPy · Docker
+Project structure
+File	Purpose
+`extract_pdf.py`	Converts a PDF to a `.txt` file in `data/`
+`ingest.py`	Builds the index from `data/*.txt`
+`chat.py`	Terminal chat: retrieves chunks and asks llama3.2
+`embeddings.npz`	Saved index (created by `ingest.py`)
+`requirements.txt`	Pinned Python dependencies
+`Dockerfile`	Container build
+`HOW_TO_RUN.txt`	Detailed step-by-step guide
+Quick start
+Requirements: Windows PC with 8 GB RAM or more (16 GB recommended), Python 3.11, Ollama.
+```powershell
+# 1. Clone
+git clone https://github.com/<your-username>/Local-RAG-based-Research-Assistant.git
+cd Local-RAG-based-Research-Assistant
 
-Add more files to `data/` and re-run `ingest.py`. The index is rebuilt from all files each time.
+# 2. Get the model
+ollama pull llama3.2
 
-## Run with Docker
+# 3. Set up Python
+py -3.11 -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
 
-Ollama runs on your host, and the container connects to it.
+# 4. Add documents
+#    Put PDFs in data\ then convert each one:
+python extract_pdf.py "data\your_file.pdf"
 
-1. On the host, make Ollama listen on all interfaces. Set `OLLAMA_HOST=0.0.0.0` in your environment and restart Ollama.
-2. Build and run:
-   ```
-   docker build -t local-rag .
-   docker run -it --rm --add-host=host.docker.internal:host-gateway local-rag
-   ```
-   The `--add-host` flag is needed on Linux. Docker Desktop on Windows and macOS already has it, so you can leave it out there.
+# 5. Build the index
+python ingest.py
 
-The image includes `embeddings.npz`. The `data/` folder is not copied into the image, so to re-index, run `ingest.py` on the host.
-
-## Project structure
-
+# 6. Chat (Ollama must be running)
+python chat.py
 ```
-ingest.py        build the index from data/*.txt
-chat.py          retrieve chunks and answer questions with Ollama
-extract_pdf.py   convert a PDF to .txt in data/
-embeddings.npz   saved index (chunks, sources, vectors)
-data/            your source .txt files (not committed)
-Dockerfile       container build
+Type your question at the `You:` prompt. Type `exit` to quit.
+Run with Docker
+Ollama keeps running on your computer; only the chat runs in the container.
+One-time setup
+Install Docker Desktop and wait for "Engine running".
+Set the environment variable `OLLAMA_HOST` to `0.0.0.0`, then restart Ollama.
+Build
+```powershell
+docker build -t local-rag .
 ```
-
-## Limitations
-
-- Chunking is fixed-size by characters, not by sentence or section.
-- Answers name the source file, not the page or passage.
-- Each question is answered on its own, with no chat history.
-- The index is rebuilt from scratch on every ingest.
+Option 1: PowerShell
+```powershell
+docker run -it --rm local-rag
+```
+Option 2: Docker Desktop
+```powershell
+docker run -dit --name rag-chat local-rag tail -f /dev/null
+```
+Then open Docker Desktop > Containers > `rag-chat` > Exec tab and run:
+```
+python chat.py
+```
+The image includes `embeddings.npz` but not `data/`. To add documents, run `ingest.py` locally and rebuild the image.
+Screenshots
+<!-- Add a screenshot of Docker Desktop with the container running and the chat answering -->
+![Docker Desktop demo](docs/docker-demo.png)
+Troubleshooting
+Problem	Fix
+`Could not reach Ollama`	Open Ollama so it runs in the system tray. For Docker, also set `OLLAMA_HOST=0.0.0.0` and restart it
+`embeddings.npz not found`	Run `python ingest.py`
+`No .txt files found in data/`	Convert PDFs with `extract_pdf.py` or add `.txt` files
+Answers say "I don't know"	Use the exact terms from the document. Scanned (image-only) PDFs can't be searched
+`pip install` fails	Recreate the venv with Python 3.11
+More in HOW_TO_RUN.txt.
+Limitations
+Scanned PDFs need OCR before use
+Answer quality depends on the local model and on how well the documents convert to text
+Terminal interface only
+Future improvements
+Web UI (Streamlit or Gradio)
+OCR support for scanned PDFs
+Persistent vector store (FAISS or Chroma)
+Docker Compose with Ollama as a service
+Author
+<your name>: GitHub · LinkedIn
+License
+MIT (add a `LICENSE` file if you choose this).
